@@ -135,6 +135,7 @@ while [ $# -gt 0 ]; do
       ARROW=true
       ;;
     --arrow-version)
+      shift
       ARROW_VERSION=$1
       ;;
     --nopackages)
