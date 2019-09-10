@@ -5,14 +5,14 @@ set -x -e
 # for installing RStudio (and Shiny) with SparkR, SparklyR, etc  on AWS EMR 4.x and 5.x
 #
 # 2014-09-24 - schmidbe@amazon.de initial version for RHadoop packages and RStudio
-# 2015-07-14 - Tom Zeng tomzeng@amazon.com, modified on top of Christopher Bozeman's "--sparkr" change to add "--sparkr-pkg"
-# 2015-07-29 - Tom Zeng tomzeng@amazon.com, converted to AMI 4.0.0 compatible
-# 2016-01-15 - Tom Zeng tomzeng@amazon.com, converted to AMI 4.2.0 compatible and added shiny
-# 2016-10-07 - Tom Zeng tomzeng@amazon.com, added Sparklyr and improved install speed by 2-3x
-# 2016-11-04 - Tom Zeng tomzeng@amazon.com, added RStudio 1.0, and used function rather than separate script for child process, removed --sparkr-pkg
-# 2017-05-26 - Tom Zeng tomzeng@amazon.com, fixed the Shiny install typo, thanks to David Howell for spotting it
-# 2018-09-23 - TOm Zeng tomzeng@amazon.com, fixed issues with the R 3.4 upgrade, and added CloudyR
-
+# 2015-07-14 - Tom Zeng tomzeng at amazon.com, modified on top of Christopher Bozeman's "--sparkr" change to add "--sparkr-pkg"
+# 2015-07-29 - Tom Zeng tomzeng at amazon.com, converted to AMI 4.0.0 compatible
+# 2016-01-15 - Tom Zeng tomzeng at amazon.com, converted to AMI 4.2.0 compatible and added shiny
+# 2016-10-07 - Tom Zeng tomzeng at amazon.com, added Sparklyr and improved install speed by 2-3x
+# 2016-11-04 - Tom Zeng tomzeng at amazon.com, added RStudio 1.0, and used function rather than separate script for child process, removed --sparkr-pkg
+# 2017-05-26 - Tom Zeng tomzeng at amazon.com, fixed the Shiny install typo, thanks to David Howell for spotting it
+# 2018-09-23 - Tom Zeng tomzeng at amazon.com, fixed issues with the R 3.4 upgrade, and added CloudyR
+# 2019-09-10 - Javier Luraschi javier at rstudio.com, support for arrow and improvements
 
 # Usage:
 # --no-rstudio - don't install rstudio-server
@@ -21,6 +21,7 @@ set -x -e
 # --sparkr - install SparkR package
 # --shiny - install Shiny server
 # --shiny-url - the url for the Shiny RPM file
+# --nopackages - Do not install basic packages
 #
 # --user - set user for rstudio, default "hadoop"
 # --user-pw - set user-pw for user USER, default "hadoop"
@@ -32,6 +33,9 @@ set -x -e
 # --no-updateR - don't update latest R version
 # --latestR - install latest R version, default false (build from source - caution, may cause problem with RStudio)
 # --cloudyr - install the CloudyR packages
+#
+# --arrow - install Apache Arrow
+# --arrow-version - the version of Apache Arrow to install
 
 # check for master node
 IS_MASTER=false
@@ -43,7 +47,7 @@ fi
 # error message
 error_msg ()
 {
-	echo 1>&2 "Error: $1"
+  echo 1>&2 "Error: $1"
 }
 
 # get input parameters
@@ -59,79 +63,92 @@ LATEST_R=false
 RSTUDIOPORT=8787
 SPARKR=false
 SPARKLYR=false
-RSTUDIO_URL="https://download2.rstudio.org/rstudio-server-rhel-1.0.153-x86_64.rpm"
+RSTUDIO_URL="https://download2.rstudio.org/rstudio-server-rhel-1.1.463-x86_64.rpm"
 MIN_USER_ID=400 # default is 500 starting from 1.0.44, EMR hadoop user id is 498
-SHINY_URL="https://download3.rstudio.org/centos5.9/x86_64/shiny-server-1.5.1.834-rh5-x86_64.rpm"
+SHINY_URL="https://download3.rstudio.org/centos6.3/x86_64/shiny-server-1.5.9.923-x86_64.rpm"
 CLOUDYR=false
+ARROW=false
+ARROW_VERSION="0.12.0"
+PACKAGES=false
+INSTALL_PACKAGES=true
 
 while [ $# -gt 0 ]; do
-	case "$1" in
-		--sparklyr)
-			SPARKLYR=true
-			;;
-  	--rstudio)
+  case "$1" in
+    --sparklyr)
+      SPARKLYR=true
+      ;;
+    --rstudio)
       RSTUDIO=true
-  		;;
-  	--rstudio-url)
+      ;;
+    --rstudio-url)
       shift
       RSTUDIO_URL=$1
-  		;;
-		--no-rstudio)
-			RSTUDIO=false
-			;;
-		--shiny)
-			SHINY=true
-			;;
-  	--shiny-url)
+      ;;
+    --no-rstudio)
+      RSTUDIO=false
+      ;;
+    --shiny)
+      SHINY=true
+      ;;
+    --shiny-url)
       shift
       SHINY_URL=$1
-  		;;
-		--rexamples)
-			REXAMPLES=true
-			;;
-		--plyrmr)
-			PLYRMR=true
-			;;
-		--rhdfs)
-			RHDFS=true
-			;;
-  	--updateR)
+      ;;
+    --rexamples)
+      REXAMPLES=true
+      ;;
+    --plyrmr)
+      PLYRMR=true
+      ;;
+    --rhdfs)
+      RHDFS=true
+      ;;
+    --updateR)
       UPDATER=true
-  		;;
-		--no-updateR)
-			UPDATER=false
-			;;
-		--latestR)
-			LATEST_R=true
-			UPDATER=false
-			;;
+      ;;
+    --no-updateR)
+      UPDATER=false
+      ;;
+    --latestR)
+      LATEST_R=true
+      UPDATER=false
+      ;;
     --sparkr)
-    	SPARKR=true
-    	;;
+      SPARKR=true
+      ;;
     --rstudio-port)
       shift
       RSTUDIOPORT=$1
       ;;
-		--user)
-		   shift
-		   USER=$1
-		   ;;
- 		--user-pw)
- 		   shift
- 		   USERPW=$1
- 		   ;;
+    --user)
+       shift
+       USER=$1
+       ;;
+    --user-pw)
+       shift
+       USERPW=$1
+       ;;
     --cloudyr)
-     	CLOUDYR=true
-     	;;
-		-*)
-			# do not exit out, just note failure
-			error_msg "unrecognized option: $1"
-			;;
-		*)
-			break;
-			;;
-	esac
-	shift
+      CLOUDYR=true
+      ;;
+    --arrow)
+      ARROW=true
+      ;;
+    --arrow-version)
+      ARROW_VERSION=$1
+      ;;
+    --nopackages)
+      INSTALL_PACKAGES=false
+      ;;
+    -*)
+      # do not exit out, just note failure
+      error_msg "unrecognized option: $1"
+      ;;
+    *)
+      break;
+      ;;
+  esac
+  shift
 done
 
 if [ "$IS_MASTER" = true ]; then
@@ -167,23 +184,57 @@ cd /mnt/r-stuff
 
 
 # update to latest R version
-if [ "$LATEST_R" = true ]; then
+if [ "$LATEST_R" = true ] || [ "$ARROW" = true ]; then
   pushd .
-	mkdir R-latest
-	cd R-latest
-	wget http://cran.r-project.org/src/base/R-latest.tar.gz
-	tar -xzf R-latest.tar.gz
-	sudo yum install -y gcc gcc-c++ gcc-gfortran
-	sudo yum install -y readline-devel cairo-devel libpng-devel libjpeg-devel libtiff-devel
-	cd R-3*
-	./configure --with-readline=yes --enable-R-profiling=no --enable-memory-profiling=no --enable-R-shlib --with-pic --prefix=/usr --with-x --with-libpng --with-jpeglib --with-cairo --enable-R-shlib --with-recommended-packages=yes
-	make -j 8
-	sudo make install
+  mkdir R-latest
+  cd R-latest
+  wget http://cran.r-project.org/src/base/R-latest.tar.gz
+  tar -xzf R-latest.tar.gz
+  sudo yum install -y gcc gcc-c++ gcc-gfortran
+  sudo yum install -y readline-devel cairo-devel libpng-devel libjpeg-devel libtiff-devel
+  cd R-3*
+  ./configure --with-readline=yes --enable-R-profiling=no --enable-memory-profiling=no --enable-R-shlib --with-pic --prefix=/usr --with-x --with-libpng --with-jpeglib --with-cairo --enable-R-shlib --with-recommended-packages=yes
+  make -j 8
+  sudo make install
   sudo su << BASH_SCRIPT
 echo '
 export PATH=${PWD}/bin:$PATH
 ' >> /etc/profile
 BASH_SCRIPT
+  popd
+fi
+
+if [ "$ARROW" = true ]; then
+  pushd .
+  cd /mnt/r-stuff
+
+  # install dependencies
+  sudo yum install -y boost
+  sudo yum install -y boost-devel
+  sudo yum install -y autoconf
+  sudo yum install -y flex
+  sudo yum install -y bison
+  sudo yum install -y libssh2-devel
+
+  # install cmake 3.x
+  wget https://cmake.org/files/v3.10/cmake-3.10.0.tar.gz
+  tar -xvzf cmake-3.10.0.tar.gz
+  cd cmake-3.10.0
+  ./bootstrap
+  make
+  sudo make install
+  export PATH=$PATH:/usr/local/bin/
+  cd ..
+
+  # install arrow
+  wget https://arrowlib.rstudio.com/dist/arrow/arrow-$ARROW_VERSION/apache-arrow-$ARROW_VERSION.tar.gz
+  tar -xvzf apache-arrow-$ARROW_VERSION.tar.gz
+  cd apache-arrow-$ARROW_VERSION/cpp
+  mkdir release
+  cd release
+  cmake -DARROW_BUILD_TESTS=ON -DARROW_PARQUET=ON ..
+  sudo make install
+
   popd
 fi
 
@@ -238,36 +289,37 @@ if [ "$IS_MASTER" = true -a "$REXAMPLES" = true ]; then
 fi
 
 
-# install required packages
-sudo R --no-save << R_SCRIPT
-install.packages(c('RJSONIO', 'itertools', 'digest', 'Rcpp', 'functional', 'httr', 'plyr', 'stringr', 'reshape2', 'caTools', 'rJava', 'devtools', 'DBI', 'ggplot2', 'dplyr', 'R.methodsS3', 'Hmisc', 'memoise', 'rjson'),
-repos="http://cran.rstudio.com")
-# here you can add your required packages which should be installed on ALL nodes
-# install.packages(c(''), repos="http://cran.rstudio.com", INSTALL_opts=c('--byte-compile') )
+# install rhdfs package
+if [ "$INSTALL_PACKAGES" = true ]; then
+  # install required packages
+  sudo R --no-save << R_SCRIPT
+  install.packages(c('RJSONIO', 'itertools', 'digest', 'Rcpp', 'functional', 'httr', 'plyr', 'stringr', 'reshape2', 'caTools', 'rJava', 'devtools', 'DBI', 'ggplot2', 'dplyr', 'R.methodsS3', 'Hmisc', 'memoise', 'rjson'),
+  repos="http://cran.rstudio.com")
+  # here you can add your required packages which should be installed on ALL nodes
+  # install.packages(c(''), repos="http://cran.rstudio.com", INSTALL_opts=c('--byte-compile') )
 R_SCRIPT
 
-
-# install rmr2 package
-pushd .
-rm -rf RHadoop
-mkdir RHadoop
-cd RHadoop
-curl --insecure -L https://github.com/RevolutionAnalytics/rmr2/releases/download/3.3.1/rmr2_3.3.1.tar.gz | tar zx
-sudo R CMD INSTALL --byte-compile rmr2
-popd
-
+  # install rmr2 package
+  pushd .
+  rm -rf RHadoop
+  mkdir RHadoop
+  cd RHadoop
+  curl --insecure -L https://github.com/RevolutionAnalytics/rmr2/releases/download/3.3.1/rmr2_3.3.1.tar.gz | tar zx
+  sudo R CMD INSTALL --byte-compile rmr2
+  popd
+fi
 
 # install rhdfs package
 if [ "$RHDFS" = true ]; then
-	curl --insecure -L https://raw.github.com/RevolutionAnalytics/rhdfs/master/build/rhdfs_1.0.8.tar.gz | tar zx
-	sudo R CMD INSTALL --byte-compile --no-test-load rhdfs
+  curl --insecure -L https://raw.github.com/RevolutionAnalytics/rhdfs/master/build/rhdfs_1.0.8.tar.gz | tar zx
+  sudo R CMD INSTALL --byte-compile --no-test-load rhdfs
 fi
 
 
 # install plyrmr package
 if [ "$PLYRMR" = true ]; then
-	curl --insecure -L https://github.com/RevolutionAnalytics/plyrmr/releases/download/0.6.0/plyrmr_0.6.0.tar.gz | tar zx
-	sudo R CMD INSTALL --byte-compile plyrmr 
+  curl --insecure -L https://github.com/RevolutionAnalytics/plyrmr/releases/download/0.6.0/plyrmr_0.6.0.tar.gz | tar zx
+  sudo R CMD INSTALL --byte-compile plyrmr 
 fi
 
 
