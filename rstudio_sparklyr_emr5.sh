@@ -68,7 +68,7 @@ MIN_USER_ID=400 # default is 500 starting from 1.0.44, EMR hadoop user id is 498
 SHINY_URL="https://download3.rstudio.org/centos6.3/x86_64/shiny-server-1.5.9.923-x86_64.rpm"
 CLOUDYR=false
 ARROW=false
-ARROW_VERSION="0.12.0"
+ARROW_VERSION="0.14.1"
 PACKAGES=false
 INSTALL_PACKAGES=true
 
@@ -227,7 +227,7 @@ if [ "$ARROW" = true ]; then
   cd ..
 
   # install arrow
-  wget https://arrowlib.rstudio.com/dist/arrow/arrow-$ARROW_VERSION/apache-arrow-$ARROW_VERSION.tar.gz
+  wget http://archive.apache.org/dist/arrow/arrow-$ARROW_VERSION/apache-arrow-$ARROW_VERSION.tar.gz
   tar -xvzf apache-arrow-$ARROW_VERSION.tar.gz
   cd apache-arrow-$ARROW_VERSION/cpp
   mkdir release
