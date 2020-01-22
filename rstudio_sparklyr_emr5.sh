@@ -294,11 +294,15 @@ fi
 if [ "$INSTALL_PACKAGES" = true ]; then
   # install required packages
   sudo R --no-save << R_SCRIPT
-  install.packages(c('RJSONIO', 'itertools', 'digest', 'Rcpp', 'functional', 'httr', 'plyr', 'stringr', 'reshape2', 'caTools', 'rJava', 'devtools', 'DBI', 'ggplot2', 'dplyr', 'R.methodsS3', 'Hmisc', 'memoise', 'rjson'),
+  install.packages(c('RJSONIO', 'itertools', 'digest', 'Rcpp', 'functional', 'httr', 'plyr', 'stringr', 'reshape2', 'rJava', 'devtools', 'DBI', 'ggplot2', 'dplyr', 'R.methodsS3', 'Hmisc', 'memoise', 'rjson'),
   repos="http://cran.rstudio.com")
   # here you can add your required packages which should be installed on ALL nodes
   # install.packages(c(''), repos="http://cran.rstudio.com", INSTALL_opts=c('--byte-compile') )
 R_SCRIPT
+
+  # install caTools
+  curl --insecure -L https://cran.r-project.org/src/contrib/Archive/caTools/caTools_1.17.1.4.tar.gz | tar zx
+  sudo R CMD INSTALL --byte-compile caTools
 
   # install rmr2 package
   pushd .
